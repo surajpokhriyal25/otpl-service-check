@@ -4,6 +4,7 @@ import argparse
 import logging
 import re
 import requests
+import urlparse
 
 log = logging.getLogger("nagiosplugin")
 
@@ -54,7 +55,7 @@ class MesosHealthCheck(nagiosplugin.Resource):
 
   def probe(self):
     try:
-      endpoint_to_check = self.service_uri + self.endpoint
+      endpoint_to_check = urlparse.urljoin(self.service_uri, self.endpoint)
       log.debug('Checking %s', endpoint_to_check)
       response = requests.get(endpoint_to_check, timeout=float(self.timeout))
       if not response.status_code in [200, 204]:
