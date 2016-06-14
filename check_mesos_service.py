@@ -1,114 +1,135 @@
 #!/usr/bin/env python
-import nagiosplugin
-import argparse
-import logging
-import re
+
+import sys
+import traceback
+from argparse import ArgumentParser
+from collections import namedtuple
+from urlparse import urljoin
+
 import requests
-import urlparse
 
-log = logging.getLogger("nagiosplugin")
+discotimeout = 4 # In seconds.
+tokenkey = 'server-token'
+resplim = 128 # Response output character limit.
 
-INFINITY = float('inf')
-HEALTHY = 1
-UNHEALTHY = -1
-TOKEN = "server-token"
+class Main(object):
+  Problem = namedtuple('Problem', ('code', 'message'))
 
-class DiscoveryState(nagiosplugin.Resource):
-  def __init__(self, name, announcements):
-    self.myname = name
-    self.announcements = announcements
+  # Parse arguments.
+  def __init__(self):
+    parser = ArgumentParser(description='Check Mesos service for health.')
+    parser.add_argument('-d', '--discovery', required=True,
+      help='discovery server URL')
+    parser.add_argument('-s', '--service', required=True,
+      help='service name to check')
+    parser.add_argument('-e', '--endpoint', default='health',
+      help='endpoint to check; default %(default)r')
+    parser.add_argument('-t', '--timeout', type=float, default=5,
+      help='endpoint check timeout in seconds; default %(default)s')
+    parser.add_argument('-c', '--critical', type=int, default=1,
+      help='minimum instances before critical; default %(default)s; '
+      'set to 0 to disable')
+    parser.add_argument('-w', '--warn', type=int, default=1,
+      help='minimum instances before warning; default %(default)s; '
+      'set to 0 to disable')
+    args = parser.parse_args()
 
-  @property
-  def name(self):
-    return self.myname + ' announcement'
+    # Parser error terminates process with code 2 ("CRITICAL").
+    if args.timeout <= 0:
+      parser.error('timeout must be positive')
+    if args.critical < 0:
+      parser.error('critical must be non-negative')
+    if args.warn < 0:
+      parser.error('warn must be non-negative')
+    if args.warn < args.critical:
+      parser.error('warn must be at least as large as critical')
 
-  def probe(self):
+    self.args = args
+
+  def get_announcements(self):
+    url = urljoin(self.args.discovery, 'state')
+    state = requests.get(url, timeout=discotimeout).json()
+    return [a for a in state if a['serviceType'] == self.args.service]
+
+  @staticmethod
+  def count_announcements(announcements):
     seen = set()
     count = 0
-    for ann in self.announcements:
-      metadata = ann.get("metadata", dict())
-      if TOKEN in metadata:
-        token = metadata[TOKEN]
-        if token not in seen:
-          seen.add(token)
-          log.debug('New token %s' % token)
-          count += 1
-        else:
-          log.debug('Seen token %s' % token)
-      else:
-        log.debug('No token for service %s' % ann['announcementId'])
+    for ann in announcements:
+      metadata = ann.get('metadata', {})
+      if tokenkey not in metadata:
+        # No token; this is ok.
         count += 1
-    yield nagiosplugin.Metric('announced services', count)
+        continue
+      token = metadata[tokenkey]
+      if token not in seen:
+        seen.add(token)
+        count += 1
+    return count
 
+  @classmethod
+  def make_problem(cls, code, topic, message):
+    state = {2: 'critical', 1: 'warning'}[code]
+    return cls.Problem(code, '%s %s: %s' % (topic, state, message))
 
-class MesosHealthCheck(nagiosplugin.Resource):
-  def __init__(self, name, service_uri, endpoint, metric_name, timeout):
-    self.myname = name
-    self.service_uri = service_uri
-    self.endpoint = endpoint
-    self.metric_name = metric_name
-    self.timeout = timeout
+  def make_announcement_problem(self, code, count):
+    msg = '%s (crit./warn thresh. %s/%s)' % (
+      count, self.args.critical, self.args.warn)
+    return self.make_problem(code, 'announcements', msg)
 
-  @property
-  def name(self):
-    return self.myname + ' ' + self.endpoint
+  @classmethod
+  def make_response_problem(cls, code, status_code, text):
+    if len(text) > resplim: text = text[:resplim] + '...'
+    msg = '%s from endpoint\n%s' % (status_code, text)
+    return cls.make_problem(code, 'health', msg)
 
-  def probe(self):
+  def make_timeout_problem(self, type):
+    return self.make_problem(2, '%s timeout' % type,
+      'thresh. %.2f' % self.args.timeout)
+
+  # Return Problem or None if ok.
+  def check_endpoint(self, announcement):
+    url = urljoin(announcement['serviceUri'], self.args.endpoint)
     try:
-      endpoint_to_check = urlparse.urljoin(self.service_uri, self.endpoint)
-      log.debug('Checking %s', endpoint_to_check)
-      response = requests.get(endpoint_to_check, timeout=float(self.timeout))
-      if not response.status_code in [200, 204]:
-        log.error('%s health %s: %s', self.metric_name, response.status_code, response.text)
-        yield nagiosplugin.Metric(self.metric_name, UNHEALTHY)
-      else:
-        log.debug('%s health %s: %s', self.metric_name, response.status_code, response.text)
-        yield nagiosplugin.Metric(self.metric_name, HEALTHY)
-    except requests.exceptions.RequestException, e:
-      log.error('%s health %s', self.metric_name, e)
-      yield nagiosplugin.Metric(self.metric_name, UNHEALTHY)
+      resp = requests.get(url, timeout=self.args.timeout)
+      code = resp.status_code // 100
+      if code == 5:
+        return self.make_response_problem(2, resp.status_code, resp.text)
+      if code == 4:
+        return self.make_response_problem(1, resp.status_code, resp.text)
+    except requests.exceptions.ConnectTimeout:
+      return self.make_timeout_problem('connect')
+    except requests.exceptions.ReadTimeout:
+      return self.make_timeout_problem('read')
+    except requests.exceptions.RequestException:
+      return self.make_problem(2, 'health',
+        'unhandled exception\n' + traceback.format_exc())
 
-@nagiosplugin.guarded
-def main():
-  argp = argparse.ArgumentParser()
-  argp.add_argument('-d', '--discovery', required=True,
-                    help='The URL of the discovery server')
-  argp.add_argument('-s', '--service', required=True,
-                    help='The service name to check')
-  argp.add_argument('-e', '--endpoint', default='/health',
-                    help='The endpoint to check')
-  argp.add_argument('-t', '--timeout', default=5,
-                    help='Timeout')
-  argp.add_argument('-n', '--instances', default=1,
-                    help='Minimum instances before critical')
-  argp.add_argument('-w', '--warn', default=-1,
-                    help='Minimum instances before warn')
-  argp.add_argument('-v', '--verbose', action='count', default=0,
-                    help='increase output verbosity (use up to 3 times)')
+  def run(self):
+    try:
+      announcements = self.get_announcements()
+    except Exception:
+      print 'failed to get announcements'
+      print traceback.format_exc()
+      return 3
 
-  args = argp.parse_args()
+    # Will contain Problem instances.
+    bad = []
 
-  unhealthy_range = nagiosplugin.Range('%d:%d' % (HEALTHY - 1, HEALTHY + 1))
-  warn_services_range = nagiosplugin.Range('%s:' % (args.warn,))
-  crit_services_range = nagiosplugin.Range('%s:' % (args.instances,))
+    count = self.count_announcements(announcements)
+    if count < self.args.critical:
+      bad.append(self.make_announcement_problem(2, count))
+    elif count < self.args.warn:
+      bad.append(self.make_announcement_problem(1, count))
 
-  try:
-    discovery_state = requests.get(args.discovery + '/state', timeout=4).json()
-  except ValueError, e:
-    log.error('ValueError while parsing discovery state: %s', e)
-    discovery_state = []
-  announcements = [a for a in discovery_state if a['serviceType'] == args.service]
+    for ann in announcements:
+      problem = self.check_endpoint(ann)
+      if problem is not None: bad.append(problem)
 
-  check = nagiosplugin.Check(
-              DiscoveryState(args.service, announcements),
-              nagiosplugin.ScalarContext('announced services', warn_services_range, crit_services_range))
+    bad.sort(reverse=True) # Worst problems first.
+    for problem in bad: print problem.message
 
-  for ann in announcements:
-    name = 'service %s instance %s' % (ann['serviceType'], ann['serviceUri'])
-    check.add(MesosHealthCheck(args.service, ann['serviceUri'], args.endpoint, name, args.timeout),
-              nagiosplugin.ScalarContext(name, unhealthy_range, unhealthy_range))
+    # Return with worst code if there are any, else 0 for success.
+    return bad[0].code if bad else 0
 
-  check.main(verbose=args.verbose)
-
-if __name__ == '__main__':
-  main()
+sys.exit(Main().run())
