@@ -19,34 +19,49 @@ class Main(object):
 
   # Parse arguments.
   def __init__(self):
-    parser = ArgumentParser(description='Check Mesos service for health.')
-    parser.add_argument('-d', '--discovery', required=True,
+    self.parser = ArgumentParser(description='Check Mesos service for health.')
+
+    # These first two are actually required.  See below.
+    self.parser.add_argument('-d', '--discovery', default=None,
       help='discovery server URL')
-    parser.add_argument('-s', '--service', required=True,
+    self.parser.add_argument('-s', '--service', default=None,
       help='service name to check')
-    parser.add_argument('-e', '--endpoint', default='health',
+
+    self.parser.add_argument('-e', '--endpoint', default='health',
       help='endpoint to check; default %(default)r')
-    parser.add_argument('-t', '--timeout', type=float, default=5,
+    self.parser.add_argument('-t', '--timeout', type=float, default=5,
       help='endpoint check timeout in seconds; default %(default)s')
-    parser.add_argument('-c', '--critical', type=int, default=1,
+    self.parser.add_argument('-c', '--critical', type=int, default=1,
       help='minimum instances before critical; default %(default)s; '
       'set to 0 to disable')
-    parser.add_argument('-w', '--warn', type=int, default=1,
+    self.parser.add_argument('-w', '--warn', type=int, default=1,
       help='minimum instances before warning; default %(default)s; '
       'set to 0 to disable')
-    args = parser.parse_args()
+    args = self.parser.parse_args()
 
-    # Parser error terminates process with code 2 ("CRITICAL").
+    # We do this manually here since the argparse default is to exit
+    # with code 2.  See parser_error.
+    if args.discovery is None:
+      self.parser_error('argument -d/--discovery is required')
+    if args.service is None:
+      self.parser_error('argument -s/--service is required')
+
     if args.timeout <= 0:
-      parser.error('timeout must be positive')
+      self.parser_error('timeout must be positive')
     if args.critical < 0:
-      parser.error('critical must be non-negative')
+      self.parser_error('critical must be non-negative')
     if args.warn < 0:
-      parser.error('warn must be non-negative')
+      self.parser_error('warn must be non-negative')
     if args.warn < args.critical:
-      parser.error('warn must be at least as large as critical')
+      self.parser_error('warn must be at least as large as critical')
 
     self.args = args
+
+  def parser_error(self, message):
+    # Code 3 is "UNKNOWN".  (argparse default is 2, which would be
+    # "CRITICAL"--inappropriate.)
+    self.parser.print_usage()
+    self.parser.exit(3, '%s: error: %s\n' % (self.parser.prog, message))
 
   def get_announcements(self):
     url = urljoin(self.args.discovery, 'state')
