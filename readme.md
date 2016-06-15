@@ -27,8 +27,18 @@ code 1).  `5xx` is considered critical (exit code 2).  In the latter two
 cases, in addition to logging the service status, we log a small number
 of characters from each endpoint response.
 
-_All_ warnings and critical statuses are logged, and the exit status of
-the whole process is the worst of the set.
+_All_ critical statuses, warnings, and successes are logged, and the
+exit status of the whole process is the worst of the set.
+
+Endpoint Response Codes
+-----------------------
+- `2xx`: `0`, `OK`
+- `4xx`: `1`, `WARNING`
+- `5xx`: `2`, `CRITICAL`
+
+This is _a bit of an abuse_ of HTTP response codes, but our policy is
+that this is the simplest and most flexible way to get rich status
+responses from health check endpoints.
 
 Notes
 -----
