@@ -167,4 +167,9 @@ class Main(object):
       print '---'
     return results[0].code
 
-sys.exit(Main().run())
+try:
+  sys.exit(Main().run())
+except Exception:
+  print 'unhandled exception'
+  print traceback.format_exc()
+  sys.exit(3)
