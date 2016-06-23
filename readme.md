@@ -13,7 +13,7 @@ Run with `-h` or `--help` to see command-line argument documentation.
 Interface
 ---------
 If there is an error parsing command-line arguments, we return with exit
-code 2 (`CRITICAL`) and print the invocation error.
+code 3 (`UNKNOWN`) and print the invocation error.
 
 If there is an error reaching Discovery and parsing the announcements
 for your service, we return with exit code 3 (`UNKNOWN`).
