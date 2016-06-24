@@ -31,10 +31,10 @@ class Main(object):
       help='endpoint to check; default %(default)r')
     self.parser.add_argument('-t', '--timeout', type=float, default=5,
       help='endpoint check timeout in seconds; default %(default)s')
-    self.parser.add_argument('-c', '--critical', type=int, default=1,
+    self.parser.add_argument('-c', '--critical-fewer', type=int, default=1,
       help='minimum instances before critical; default %(default)s; '
       'set to 0 to disable')
-    self.parser.add_argument('-w', '--warn', type=int, default=1,
+    self.parser.add_argument('-w', '--warn-fewer', type=int, default=1,
       help='minimum instances before warning; default %(default)s; '
       'set to 0 to disable')
     args = self.parser.parse_args()
@@ -48,12 +48,13 @@ class Main(object):
 
     if args.timeout <= 0:
       self.parser_error('timeout must be positive')
-    if args.critical < 0:
-      self.parser_error('critical must be non-negative')
-    if args.warn < 0:
-      self.parser_error('warn must be non-negative')
-    if args.warn < args.critical:
-      self.parser_error('warn must be at least as large as critical')
+    if args.critical_fewer < 0:
+      self.parser_error('critical-fewer must be non-negative')
+    if args.warn_fewer < 0:
+      self.parser_error('warn-fewer must be non-negative')
+    if args.warn_fewer < args.critical_fewer:
+      self.parser_error(
+        'warn-fewer must be at least as large as critical-fewer')
 
     self.args = args
 
@@ -96,7 +97,7 @@ class Main(object):
 
   def make_announcement_result(self, code, count):
     msg = '%s\ncrit./warn thresh.: %s/%s' % (
-      count, self.args.critical, self.args.warn)
+      count, self.args.critical_fewer, self.args.warn_fewer)
     return self.make_result(code, 'announcements', msg)
 
   @classmethod
@@ -149,9 +150,9 @@ class Main(object):
     results = []
 
     count = self.count_announcements(announcements)
-    if count < self.args.critical:
+    if count < self.args.critical_fewer:
       results.append(self.make_announcement_result(2, count))
-    elif count < self.args.warn:
+    elif count < self.args.warn_fewer:
       results.append(self.make_announcement_result(1, count))
     else:
       results.append(self.make_announcement_result(0, count))
