@@ -19,7 +19,8 @@ class Main(object):
 
   # Parse arguments.
   def __init__(self):
-    self.parser = ArgumentParser(description='Check Mesos service for health.')
+    self.parser = ArgumentParser(
+      description='Check Discovery service for health.')
 
     # These first two are actually required.  See below.
     self.parser.add_argument('-d', '--discovery', default=None,
