@@ -1,10 +1,10 @@
-nagios-mesos-service-check
-==========================
-Basic Nagios/Sensu checks for OpenTable Mesos services.
+otpl-service-check
+==================
+Basic Nagios/Sensu checks for OpenTable Discovery services.
 
 Distribution
 ------------
-https://pypi.python.org/pypi/nagios-mesos-service-check
+https://pypi.python.org/pypi/otpl-service-check
 
 Arguments
 ---------
