@@ -8,7 +8,7 @@ def parse_requirements(filename):
 setup(
     name="nagios-mesos-service-check",
     description="A selection of Nagios plugins to monitor services hosted in OpenTable Mesos.",
-    long_description=open('readme.md').read(),
+    long_description=open('README.rst').read(),
     version="1.0.0",
     packages=find_packages(),
     author='OpenTable Architecture Team',
