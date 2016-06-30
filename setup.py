@@ -6,14 +6,14 @@ def parse_requirements(filename):
     return [line for line in lineiter if line and not line.startswith("#")]
 
 setup(
-    name="nagios-mesos-service-check",
+    name="otpl-service-check",
     description="A selection of Nagios plugins to monitor services hosted in OpenTable Mesos.",
     long_description=open('README.rst').read(),
     version="1.0.0",
     packages=find_packages(),
     author='OpenTable Architecture Team',
     author_email='archteam@opentable.onmicrosoft.com',
-    url="https://github.com/opentable/nagios-mesos-service-check",
+    url="https://github.com/opentable/otpl-service-check",
     scripts=["otpl-service-check"],
     license="Apache 2",
     install_requires=parse_requirements("requirements.txt"),
