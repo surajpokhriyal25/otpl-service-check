@@ -92,8 +92,8 @@ class Main(object):
     return Result(code, '%s %s: %s' % (topic, state, message))
 
   @classmethod
-  def make_result_with_announcement(cls, code, topic, ann, message):
-    msg = '%s\nservice URI %s' % (message, ann['serviceUri'])
+  def make_response_with_uri(cls, code, topic, uri, message):
+    msg = '%s\ncheck URI %s' % (message, uri)
     return cls.make_result(code, topic, msg)
 
   def make_announcement_result(self, code, count):
@@ -102,42 +102,43 @@ class Main(object):
     return self.make_result(code, 'announcements', msg)
 
   @classmethod
-  def make_response_result(cls, code, ann, status_code, duration, text):
-    msg = '%s from endpoint\nduration %.3fs' % (status_code, duration)
+  def make_response_result(cls, code, uri, status_code, duration, text):
+    msg = '%s from endpoint' % status_code
     if code != 0:
       if len(text) > resplim: text = text[:resplim] + '...'
       msg += '\n' + text
-    return cls.make_result_with_announcement(code, 'health', ann, msg)
+    msg += '\nduration %.3fs' % duration
+    return cls.make_response_with_uri(code, 'health', uri, msg)
 
-  def make_timeout_result(self, ann, type):
-    return self.make_result_with_announcement(
-      2, '%s timeout' % type, ann, 'thresh. %.3f' % self.args.timeout)
+  def make_timeout_result(self, uri, type):
+    return self.make_response_with_uri(
+      2, '%s timeout' % type, uri, 'thresh. %.3f' % self.args.timeout)
 
   def check_endpoint(self, ann):
     serviceuri = ann['serviceUri']
-    url = urljoin(serviceuri, self.args.endpoint)
+    uri = urljoin(serviceuri, self.args.endpoint)
     start = time.time()
     try:
-      resp = requests.get(url, timeout=self.args.timeout)
+      resp = requests.get(uri, timeout=self.args.timeout)
       duration = time.time() - start
       code = resp.status_code // 100
       if code == 2:
         return self.make_response_result(
-          0, ann, resp.status_code, duration, resp.text)
+          0, uri, resp.status_code, duration, resp.text)
       if code == 4:
         return self.make_response_result(
-          1, ann, resp.status_code, duration, resp.text)
+          1, uri, resp.status_code, duration, resp.text)
       if code == 5:
         return self.make_response_result(
-          2, ann, resp.status_code, duration, resp.text)
+          2, uri, resp.status_code, duration, resp.text)
       raise Exception('unexpected status code', resp.status_code)
     except requests.exceptions.ConnectTimeout:
-      return self.make_timeout_result(ann, 'connect')
+      return self.make_timeout_result(uri, 'connect')
     except requests.exceptions.ReadTimeout:
-      return self.make_timeout_result(ann, 'read')
+      return self.make_timeout_result(uri, 'read')
     except requests.exceptions.RequestException:
-      return self.make_result_with_announcement(2, 'health',
-        ann, 'unhandled exception\n' + traceback.format_exc())
+      return self.make_response_with_uri(2, 'health',
+        uri, 'unhandled exception\n' + traceback.format_exc())
 
   def run(self):
     try:
