@@ -103,10 +103,11 @@ class Main(object):
 
   @classmethod
   def make_response_result(cls, code, ann, status_code, duration, text):
-    msg = '%s from endpoint\nduration %.3fs' % (status_code, duration)
+    msg = '%s from endpoint' % status_code
     if code != 0:
       if len(text) > resplim: text = text[:resplim] + '...'
       msg += '\n' + text
+    msg += '\nduration %.3fs' % duration
     return cls.make_result_with_announcement(code, 'health', ann, msg)
 
   def make_timeout_result(self, ann, type):
