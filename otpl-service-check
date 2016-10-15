@@ -13,7 +13,7 @@ discotimeout = 4 # In seconds.
 tokenkey = 'server-token'
 resplim = 64 # Response output character limit; only printed if not OK.
 # NB: Version is duplicated in setup.py.
-useragent = 'otpl-service-check/1.0.2'
+useragent = 'otpl-service-check/1.0.3'
 
 Result = namedtuple('Result', ('code', 'message'))
 
