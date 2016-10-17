@@ -6,6 +6,10 @@ Distribution
 ------------
 `<https://pypi.python.org/pypi/otpl-service-check>`_
 
+Dependencies
+------------
+See `requirements.txt`.
+
 Arguments
 ---------
 Run with ``-h`` or ``--help`` to see command-line argument
