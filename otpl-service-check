@@ -12,6 +12,8 @@ import requests
 discotimeout = 4 # In seconds.
 tokenkey = 'server-token'
 resplim = 64 # Response output character limit; only printed if not OK.
+# NB: Version is duplicated in setup.py.
+useragent = 'otpl-service-check/1.0.3'
 
 Result = namedtuple('Result', ('code', 'message'))
 
@@ -65,9 +67,13 @@ class Main(object):
     self.parser.print_usage()
     self.parser.exit(3, '%s: error: %s\n' % (self.parser.prog, message))
 
+  def requestsget(self, url, timeout):
+      return requests.get(url, timeout=timeout,
+          headers={'User-Agent':useragent})
+
   def get_announcements(self):
     url = urljoin(self.args.discovery, 'state')
-    state = requests.get(url, timeout=discotimeout).json()
+    state = self.requestsget(url, discotimeout).json()
     return [a for a in state if a['serviceType'] == self.args.service]
 
   @staticmethod
@@ -119,7 +125,7 @@ class Main(object):
     uri = urljoin(serviceuri, self.args.endpoint)
     start = time.time()
     try:
-      resp = requests.get(uri, timeout=self.args.timeout)
+      resp = self.requestsget(uri, self.args.timeout)
       duration = time.time() - start
       code = resp.status_code // 100
       if code == 2:
