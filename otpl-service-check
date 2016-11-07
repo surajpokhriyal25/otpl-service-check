@@ -18,7 +18,6 @@ useragent = 'otpl-service-check/1.0.3'
 Result = namedtuple('Result', ('code', 'message'))
 
 class Main(object):
-
   # Parse arguments.
   def __init__(self):
     self.parser = ArgumentParser(
