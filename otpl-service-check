@@ -107,7 +107,8 @@ class Main(object):
     return self.make_result(code, 'announcements', msg)
 
   @classmethod
-  def make_response_result(cls, code, uri, status_code, duration, text):
+  def make_response_result(
+      cls, code, uri, status_code, duration, contenttype, text):
     msg = '%s from endpoint' % status_code
     if code != 0:
       if len(text) > resplim: text = text[:resplim] + '...'
@@ -126,17 +127,20 @@ class Main(object):
     try:
       resp = self.requestsget(uri, self.args.timeout)
       duration = time.time() - start
-      code = resp.status_code // 100
+      statuscode = resp.status_code
+      code = statuscode // 100
+      contenttype = resp.headers['content-type']
+      text = resp.text
       if code == 2:
         return self.make_response_result(
-          0, uri, resp.status_code, duration, resp.text)
+          0, uri, statuscode, duration, contenttype, text)
       if code == 4:
         return self.make_response_result(
-          1, uri, resp.status_code, duration, resp.text)
+          1, uri, statuscode, duration, contenttype, text)
       if code == 5:
         return self.make_response_result(
-          2, uri, resp.status_code, duration, resp.text)
-      raise Exception('unexpected status code', resp.status_code)
+          2, uri, statuscode, duration, contenttype, text)
+      raise Exception('unexpected status code', statuscode)
     except requests.exceptions.ConnectTimeout:
       return self.make_timeout_result(uri, 'connect')
     except requests.exceptions.ReadTimeout:
