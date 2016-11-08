@@ -31,12 +31,13 @@ If your endpoint returns with status code ``2xx``, this is
 considered a success.  If it returns with ``4xx``, this is
 considered a warning (exit code 1).  ``5xx`` is considered critical
 (exit code 2).  In the latter two cases, in addition to logging the
-service status, based on the `Content-Type` of the response, we log a
+service status, based on the ``Content-Type`` of the response, we log a
 parsed version of the response body.
-- Approximately the first kilobyte of pretty-formatted `applicaton/json` responses will be printed.
-- `text/html` responses are elided; a message saying as much is printed.
-- The first 128 bytes of `text/plain` responses will be printed.
-- Otherwise, responses will be treated as `text/plain`.
+
+- Approximately the first kilobyte of pretty-formatted ``applicaton/json`` responses will be printed.
+- ``text/html`` responses are elided; a message saying as much is printed.
+- The first 128 bytes of ``text/plain`` responses will be printed.
+- Otherwise, responses will be treated as ``text/plain``.
 
 *All* critical statuses, warnings, and successes are logged, and the
 exit status of the whole process is the worst of the set.
