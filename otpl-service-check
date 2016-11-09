@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import json
 import sys
 import time
 import traceback
+
 from argparse import ArgumentParser
 from collections import namedtuple
 from urlparse import urljoin
@@ -11,14 +13,48 @@ import requests
 
 discotimeout = 4 # In seconds.
 tokenkey = 'server-token'
-resplim = 64 # Response output character limit; only printed if not OK.
 # NB: Version is duplicated in setup.py.
-useragent = 'otpl-service-check/1.0.3'
+useragent = 'otpl-service-check/1.0.4'
 
 Result = namedtuple('Result', ('code', 'message'))
 
-class Main(object):
+# Health check endpoint response parsers.  We have different parsers for
+# different content types.  "Entry point" is Parser.parse.
 
+class Parser(object):
+  parsers = {} # lower-case content type prefix -> parser class
+  @classmethod
+  def parse(cls, contenttype, text):
+    contenttype = contenttype.lower()
+    for prefix, parsercls in cls.parsers.iteritems():
+      if contenttype.startswith(prefix):
+        return parsercls().parse(text)
+    return DefaultParser().parse(text)
+
+class LimitedParser(Parser):
+  def __init__(self, limit=128): self.limit = limit
+  def parse(self, text):
+    if len(text) > self.limit:
+      text = text[:self.limit] + '...'
+    return text
+Parser.parsers['text/plain'] = LimitedParser
+
+class HtmlParser(Parser):
+  def parse(self, text): return 'html response elided'
+Parser.parsers['text/html'] = HtmlParser
+
+class JsonParser(Parser):
+  limit = 1024
+  def parse(self, text):
+    try: data = json.loads(text)
+    except ValueError: return DefaultParser().parse(text)
+    pretty = json.dumps(data, indent=2)
+    return LimitedParser(self.limit).parse(pretty)
+Parser.parsers['application/json'] = JsonParser
+
+DefaultParser = LimitedParser
+
+class Main(object):
   # Parse arguments.
   def __init__(self):
     self.parser = ArgumentParser(
@@ -108,11 +144,11 @@ class Main(object):
     return self.make_result(code, 'announcements', msg)
 
   @classmethod
-  def make_response_result(cls, code, uri, status_code, duration, text):
+  def make_response_result(
+      cls, code, uri, status_code, duration, contenttype, text):
     msg = '%s from endpoint' % status_code
     if code != 0:
-      if len(text) > resplim: text = text[:resplim] + '...'
-      msg += '\n' + text
+      msg += '\n' + Parser.parse(contenttype, text)
     msg += '\nduration %.3fs' % duration
     return cls.make_response_with_uri(code, 'health', uri, msg)
 
@@ -127,17 +163,20 @@ class Main(object):
     try:
       resp = self.requestsget(uri, self.args.timeout)
       duration = time.time() - start
-      code = resp.status_code // 100
+      statuscode = resp.status_code
+      code = statuscode // 100
+      contenttype = resp.headers['content-type']
+      text = resp.text
       if code == 2:
         return self.make_response_result(
-          0, uri, resp.status_code, duration, resp.text)
+          0, uri, statuscode, duration, contenttype, text)
       if code == 4:
         return self.make_response_result(
-          1, uri, resp.status_code, duration, resp.text)
+          1, uri, statuscode, duration, contenttype, text)
       if code == 5:
         return self.make_response_result(
-          2, uri, resp.status_code, duration, resp.text)
-      raise Exception('unexpected status code', resp.status_code)
+          2, uri, statuscode, duration, contenttype, text)
+      raise Exception('unexpected status code', statuscode)
     except requests.exceptions.ConnectTimeout:
       return self.make_timeout_result(uri, 'connect')
     except requests.exceptions.ReadTimeout:
