@@ -76,6 +76,9 @@ class Main(object):
     self.parser.add_argument('-w', '--warn-fewer', type=int, default=1,
       help='minimum instances before warning; default %(default)s; '
       'set to 0 to disable')
+    self.parser.add_argument('-n', '--no-healthcheck', action="store_true",
+      help='with Health Endpoint check; default %(default)s; '
+      'set to -n to disable healthcheck')
     args = self.parser.parse_args()
 
     # We do this manually here since the argparse default is to exit
@@ -96,7 +99,7 @@ class Main(object):
         'warn-fewer must be at least as large as critical-fewer')
 
     self.args = args
-    
+
     # track output we've already seen and remove dupes
     self.response_data_seen = set()
 
@@ -210,9 +213,12 @@ class Main(object):
     else:
       results.append(self.make_announcement_result(0, count))
 
-    for ann in announcements:
-      res = self.check_endpoint(ann)
-      if res is not None: results.append(res)
+    if self.args.no_healthcheck:
+      pass
+    else:
+      for ann in announcements:
+        res = self.check_endpoint(ann)
+        if res is not None: results.append(res)
 
     # Print worst results first and return with worst code.
     results.sort(reverse=True)
